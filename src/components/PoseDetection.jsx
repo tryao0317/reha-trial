@@ -1,18 +1,19 @@
-import React, { useEffect, useRef } from "react";
+import React, { useRef, useEffect } from "react";
 
-const PoseDetection = ({ videoUrl }) => {
+function PoseDetection({ onPoseResults }) {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
 
-  useEffect(() => {
-    const loadScripts = async () => {
-      const scriptUrls = [
-        "https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/pose.js",
-        "https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js",
-        "https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js",
-      ];
+  // ✅ MediaPipeのスクリプトを安全に読み込む関数
+  const loadMediaPipe = async () => {
+    const scriptUrls = [
+      "https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js",
+      "https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js",
+      "https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"
+    ];
 
-      for (const url of scriptUrls) {
+    for (const url of scriptUrls) {
+      if (!document.querySelector(`script[src=\"${url}\"]`)) {
         await new Promise((resolve, reject) => {
           const script = document.createElement("script");
           script.src = url;
@@ -21,17 +22,24 @@ const PoseDetection = ({ videoUrl }) => {
           document.body.appendChild(script);
         });
       }
+    }
+  };
+
+  useEffect(() => {
+    const init = async () => {
+      await loadMediaPipe();
 
       if (!window.Pose) {
-        console.error("MediaPipe Pose not loaded correctly");
+        console.error("MediaPipe Pose not loaded correctly.");
         return;
       }
 
-      const { Pose } = window;
-      const { drawConnectors, drawLandmarks } = window;
-      const pose = new Pose({
-        locateFile: (file) =>
-          `https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/${file}`,
+      const videoElement = videoRef.current;
+      const canvasElement = canvasRef.current;
+      const canvasCtx = canvasElement.getContext("2d");
+
+      const pose = new window.Pose.Pose({
+        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`,
       });
 
       pose.setOptions({
@@ -42,84 +50,49 @@ const PoseDetection = ({ videoUrl }) => {
         minTrackingConfidence: 0.5,
       });
 
-      pose.onResults(onResults);
+      pose.onResults((results) => {
+        if (!results.poseLandmarks) return;
 
-      const camera = new window.Camera(videoRef.current, {
+        canvasCtx.save();
+        canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+
+        window.drawConnectors(
+          canvasCtx,
+          results.poseLandmarks,
+          window.POSE_CONNECTIONS.filter(([a, b]) =>
+            [11, 13, 15, 23, 25, 27].includes(a) && [11, 13, 15, 23, 25, 27].includes(b)
+          ),
+          { color: "white", lineWidth: 3 }
+        );
+        window.drawLandmarks(canvasCtx, results.poseLandmarks, {
+          color: "white",
+          radius: 4,
+        });
+
+        canvasCtx.restore();
+
+        if (onPoseResults) onPoseResults(results);
+      });
+
+      const camera = new window.Camera(videoElement, {
         onFrame: async () => {
-          await pose.send({ image: videoRef.current });
+          await pose.send({ image: videoElement });
         },
         width: 640,
         height: 480,
       });
       camera.start();
-
-      function onResults(results) {
-        const canvasElement = canvasRef.current;
-        const canvasCtx = canvasElement.getContext("2d");
-        canvasCtx.save();
-        canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-        canvasCtx.drawImage(
-          results.image,
-          0,
-          0,
-          canvasElement.width,
-          canvasElement.height
-        );
-        if (results.poseLandmarks) {
-          drawConnectors(canvasCtx, results.poseLandmarks, Pose.POSE_CONNECTIONS, {
-            color: "#00FF00",
-            lineWidth: 4,
-          });
-          drawLandmarks(canvasCtx, results.poseLandmarks, {
-            color: "#FF0000",
-            lineWidth: 2,
-          });
-        }
-        canvasCtx.restore();
-      }
     };
 
-    loadScripts();
-  }, []);
+    init();
+  }, [onPoseResults]);
 
   return (
-    <div style={{ display: "flex", justifyContent: "center", gap: "20px" }}>
-      <div>
-        <video
-          ref={videoRef}
-          autoPlay
-          playsInline
-          muted
-          width="640"
-          height="480"
-          style={{ borderRadius: "10px", backgroundColor: "#000" }}
-        />
-        <canvas
-          ref={canvasRef}
-          width="640"
-          height="480"
-          style={{
-            position: "absolute",
-            left: 0,
-            top: 0,
-            zIndex: 1,
-          }}
-        />
-      </div>
-      <div>
-        <video
-          src={videoUrl}
-          autoPlay
-          loop
-          muted
-          width="640"
-          height="480"
-          controls
-          style={{ borderRadius: "10px" }}
-        />
-      </div>
+    <div className="flex justify-center">
+      <video ref={videoRef} className="rounded-lg" autoPlay muted playsInline></video>
+      <canvas ref={canvasRef} className="absolute top-0 left-0"></canvas>
     </div>
   );
-};
+}
 
 export default PoseDetection;
