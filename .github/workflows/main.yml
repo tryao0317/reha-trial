@@ -3,7 +3,7 @@ name: Deploy Vite app to GitHub Pages
 on:
   push:
     branches:
-      - master  # ← mainブランチを使っている場合は main に変更
+      - master  # ← mainブランチの場合はここを main に変更
 
 permissions:
   contents: write
@@ -13,29 +13,28 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # ① コードを取得
+      # ① コード取得
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ② Node.jsをセットアップ
+      # ② Node.js セットアップ（キャッシュ無効化！）
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
+          cache: 'none'  # ← ここを none に変更！
 
       # ③ 依存関係をインストール
       - name: Install dependencies
         run: npm install
 
-      # ④ Viteでビルド
+      # ④ Vite ビルド
       - name: Build project
         run: npm run build
 
-      # ⑤ GitHub Pagesにデプロイ
+      # ⑤ GitHub Pages にデプロイ
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./dist
-          cname: ''  # カスタムドメインを使わない場合は空欄
