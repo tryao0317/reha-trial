@@ -1,16 +1,19 @@
-name: Deploy Backend to Render
+name: Deploy Vite app to GitHub Pages
 
 on:
   push:
     branches:
-      - master  # masterブランチにpushされたとき動く
+      - master   # ← masterブランチにpushされたら自動でデプロイ
+
+permissions:
+  contents: write  # gh-pagesブランチへの書き込み許可
 
 jobs:
-  deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Setup Node.js
@@ -19,19 +22,15 @@ jobs:
           node-version: 20
 
       - name: Install dependencies
-        run: npm install
-        working-directory: ./server  # サーバーコードの場所を指定
-
-      - name: Run tests
-        run: npm test
-        working-directory: ./server
-
-      - name: Deploy to Render
-        env:
-          RENDER_TOKEN: ${{ secrets.RENDER_TOKEN }}
         run: |
-          curl -X POST \
-          -H "Accept: application/json" \
-          -H "Authorization: Bearer $RENDER_TOKEN" \
-          -d '{"serviceId": "あなたのRenderサービスID"}' \
-          https://api.render.com/v1/services/あなたのRenderサービスID/deploys
+          npm install
+
+      - name: Build project
+        run: |
+          npm run build
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
