@@ -5,64 +5,66 @@ function PoseDetection({ source = 'camera', videoUrl, isActive }) {
   const canvasRef = useRef(null);
 
   useEffect(() => {
-    if (!window.Pose) {
-      console.error('MediaPipe Pose not loaded');
-      return;
+    let detector;
+    let animationFrameId;
+
+    async function init() {
+      if (!window.poseDetection || !window.tf) {
+        console.error('TensorFlowまたはPoseDetectionが読み込まれていません');
+        return;
+      }
+
+      // MoveNet Lightning モデルを使う
+      detector = await window.poseDetection.createDetector(
+        window.poseDetection.SupportedModels.MoveNet,
+        { modelType: 'Lightning' }
+      );
+
+      if (source === 'camera') {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      } else if (source === 'video' && videoUrl) {
+        videoRef.current.src = videoUrl;
+        videoRef.current.loop = true;
+        await videoRef.current.play();
+      }
+
+      // 毎フレーム解析
+      async function renderPrediction() {
+        if (isActive && videoRef.current.readyState === 4) {
+          const poses = await detector.estimatePoses(videoRef.current);
+          drawResults(poses);
+        }
+        animationFrameId = requestAnimationFrame(renderPrediction);
+      }
+
+      renderPrediction();
     }
 
-    const pose = new window.Pose.Pose({
-      locateFile: (file) =>
-        `https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/${file}`,
-    });
-
-    pose.setOptions({
-      modelComplexity: 1,
-      smoothLandmarks: true,
-      enableSegmentation: false,
-      minDetectionConfidence: 0.5,
-      minTrackingConfidence: 0.5,
-    });
-
-    const onResults = (results) => {
+    function drawResults(poses) {
       const canvas = canvasRef.current;
       const ctx = canvas.getContext('2d');
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
 
-      if (results.poseLandmarks) {
-        window.drawConnectors(ctx, results.poseLandmarks, window.Pose.POSE_CONNECTIONS, { color: '#00FF00', lineWidth: 3 });
-        window.drawLandmarks(ctx, results.poseLandmarks, { color: '#FF0000', lineWidth: 2 });
-      }
-    };
+      ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
 
-    pose.onResults(onResults);
-
-    if (source === 'camera') {
-      const camera = new window.Camera(videoRef.current, {
-        onFrame: async () => {
-          if (isActive) await pose.send({ image: videoRef.current });
-        },
-        width: 640,
-        height: 480,
-      });
-      camera.start();
-    } else if (source === 'video' && videoUrl) {
-      const video = videoRef.current;
-      video.src = videoUrl;
-      video.loop = true;
-      video.onloadeddata = async () => {
-        video.play();
-        const sendFrame = async () => {
-          if (!video.paused && !video.ended) {
-            await pose.send({ image: video });
-            requestAnimationFrame(sendFrame);
+      poses.forEach((pose) => {
+        pose.keypoints.forEach((kp) => {
+          if (kp.score > 0.3) {
+            ctx.beginPath();
+            ctx.arc(kp.x, kp.y, 4, 0, 2 * Math.PI);
+            ctx.fillStyle = 'red';
+            ctx.fill();
           }
-        };
-        sendFrame();
-      };
+        });
+      });
     }
 
+    init();
+
     return () => {
+      if (animationFrameId) cancelAnimationFrame(animationFrameId);
       if (source === 'camera' && videoRef.current?.srcObject) {
         videoRef.current.srcObject.getTracks().forEach((t) => t.stop());
       }
@@ -71,11 +73,13 @@ function PoseDetection({ source = 'camera', videoUrl, isActive }) {
 
   return (
     <div className="relative w-full h-auto">
-      {source === 'camera' ? (
-        <video ref={videoRef} className="rounded-lg w-full" autoPlay playsInline muted />
-      ) : (
-        <video ref={videoRef} className="rounded-lg w-full" controls />
-      )}
+      <video
+        ref={videoRef}
+        className="rounded-lg w-full"
+        autoPlay
+        playsInline
+        muted
+      />
       <canvas
         ref={canvasRef}
         width={640}
