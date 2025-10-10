@@ -1,41 +1,60 @@
-name: Deploy Vite app to GitHub Pages
+name: Deploy Vite app to GitHub Pages (diagnostic)
 
 on:
   push:
     branches:
-      - master   # ← masterブランチにpushされたら自動デプロイ
+      - master
 
 permissions:
-  contents: write  # gh-pagesブランチへの書き込み許可
+  contents: write
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
-      # ① リポジトリをチェックアウト
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ② Node.jsをセットアップ
-      - name: Setup Node.js
+      - name: Setup Node.js (use 18.x for stability)
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          # cache: 'npm'  ← ❌ 削除！（package-lock.jsonが無いため）
+          node-version: '18.x'
 
-      # ③ 依存パッケージをインストール
-      - name: Install dependencies
-        run: npm install  # ← npm ci は lockファイルが必要なので npm install に変更
+      - name: Print environment and files (diagnose)
+        run: |
+          echo "=== node / npm versions ==="
+          node -v
+          npm -v
+          echo "=== npm config ==="
+          npm config ls -l || true
+          echo "=== show top of package.json ==="
+          if [ -f package.json ]; then
+            sed -n '1,200p' package.json
+          else
+            echo "package.json not found in repo root"
+          fi
+          echo "=== list root files ==="
+          ls -la
+        shell: bash
 
-      # ④ Viteプロジェクトをビルド
+      - name: Clean npm cache (best-effort)
+        run: |
+          npm cache verify || npm cache clean --force || true
+
+      - name: Install dependencies (with safe flags)
+        env:
+          NODE_OPTIONS: --max_old_space_size=4096
+        run: |
+          # legacy peer deps helps avoid peer-deps resolution failures
+          npm install --no-audit --no-fund --legacy-peer-deps
+
       - name: Build project
         run: npm run build
 
-      # ⑤ distフォルダをgh-pagesブランチにデプロイ
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./dist
-          publish_branch: gh-pages   # ← 明示的に指定（安全策）
+          publish_branch: gh-pages
