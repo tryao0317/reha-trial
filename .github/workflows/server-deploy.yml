@@ -22,11 +22,11 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'  # ← キャッシュON（再ビルド高速化）
+          # cache: 'npm'  ← ❌ 削除！（package-lock.jsonが無いため）
 
       # ③ 依存パッケージをインストール
       - name: Install dependencies
-        run: npm ci  # ← npm install よりもクリーンで安定
+        run: npm install  # ← npm ci は lockファイルが必要なので npm install に変更
 
       # ④ Viteプロジェクトをビルド
       - name: Build project
