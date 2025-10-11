@@ -13,12 +13,10 @@
   },
   "dependencies": {
     "@hookform/resolvers": "^5.0.1",
-
     "@tensorflow/tfjs": "^4.20.0",
     "@tensorflow/tfjs-backend-webgl": "^4.20.0",
     "@tensorflow/tfjs-backend-cpu": "^4.20.0",
     "@tensorflow-models/pose-detection": "^3.5.0",
-
     "@radix-ui/react-accordion": "^1.2.10",
     "@radix-ui/react-alert-dialog": "^1.1.13",
     "@radix-ui/react-aspect-ratio": "^1.1.6",
