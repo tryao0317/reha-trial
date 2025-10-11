@@ -1,25 +1,27 @@
+// PoseDetection.jsx
 import React, { useEffect, useRef } from 'react';
+import * as poseDetection from '@tensorflow-models/pose-detection';
+import '@tensorflow/tfjs-backend-webgl'; // 高速描画用（WebGL利用）
 
 function PoseDetection({ source = 'camera', videoUrl, isActive }) {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
+  const detectorRef = useRef(null);
 
   useEffect(() => {
-    let detector;
     let animationFrameId;
 
     async function init() {
-      if (!window.poseDetection || !window.tf) {
-        console.error('TensorFlowまたはPoseDetectionが読み込まれていません');
-        return;
-      }
+      // TensorFlow.jsのWebGLバックエンドをセット
+      await poseDetection.util.initializeBackend('webgl');
 
-      // MoveNet Lightning モデルを使う
-      detector = await window.poseDetection.createDetector(
-        window.poseDetection.SupportedModels.MoveNet,
+      // MoveNet Lightning モデルをロード
+      detectorRef.current = await poseDetection.createDetector(
+        poseDetection.SupportedModels.MoveNet,
         { modelType: 'Lightning' }
       );
 
+      // 映像ソースの設定
       if (source === 'camera') {
         const stream = await navigator.mediaDevices.getUserMedia({ video: true });
         videoRef.current.srcObject = stream;
@@ -30,23 +32,27 @@ function PoseDetection({ source = 'camera', videoUrl, isActive }) {
         await videoRef.current.play();
       }
 
-      // 毎フレーム解析
-      async function renderPrediction() {
-        if (isActive && videoRef.current.readyState === 4) {
-          const poses = await detector.estimatePoses(videoRef.current);
-          drawResults(poses);
-        }
+      renderPrediction();
+    }
+
+    async function renderPrediction() {
+      if (!isActive || !detectorRef.current) {
         animationFrameId = requestAnimationFrame(renderPrediction);
+        return;
       }
 
-      renderPrediction();
+      if (videoRef.current.readyState === 4) {
+        const poses = await detectorRef.current.estimatePoses(videoRef.current);
+        drawResults(poses);
+      }
+
+      animationFrameId = requestAnimationFrame(renderPrediction);
     }
 
     function drawResults(poses) {
       const canvas = canvasRef.current;
       const ctx = canvas.getContext('2d');
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-
       ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
 
       poses.forEach((pose) => {
@@ -67,6 +73,9 @@ function PoseDetection({ source = 'camera', videoUrl, isActive }) {
       if (animationFrameId) cancelAnimationFrame(animationFrameId);
       if (source === 'camera' && videoRef.current?.srcObject) {
         videoRef.current.srcObject.getTracks().forEach((t) => t.stop());
+      }
+      if (detectorRef.current) {
+        detectorRef.current.dispose();
       }
     };
   }, [isActive, source, videoUrl]);
