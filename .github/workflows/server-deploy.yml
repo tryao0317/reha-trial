@@ -1,4 +1,4 @@
-name: Deploy Vite app to GitHub Pages (diagnostic)
+name: Deploy Vite app to GitHub Pages (TensorFlow版 安定構成)
 
 on:
   push:
@@ -13,45 +13,30 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # ① ソース取得
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js (use 18.x for stability)
+      # ② Node.js 18 + npm 9 を明示的にセットアップ
+      - name: Setup Node.js (use npm 9 for stability)
         uses: actions/setup-node@v4
         with:
           node-version: '18.x'
+          cache: 'npm'
 
-      - name: Print environment and files (diagnose)
-        run: |
-          echo "=== node / npm versions ==="
-          node -v
-          npm -v
-          echo "=== npm config ==="
-          npm config ls -l || true
-          echo "=== show top of package.json ==="
-          if [ -f package.json ]; then
-            sed -n '1,200p' package.json
-          else
-            echo "package.json not found in repo root"
-          fi
-          echo "=== list root files ==="
-          ls -la
-        shell: bash
+      # ③ npmを強制的に9系にダウングレード
+      - name: Downgrade npm to v9
+        run: npm install -g npm@9
 
-      - name: Clean npm cache (best-effort)
-        run: |
-          npm cache verify || npm cache clean --force || true
+      # ④ 依存パッケージをインストール
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps --no-audit --no-fund
 
-      - name: Install dependencies (with safe flags)
-        env:
-          NODE_OPTIONS: --max_old_space_size=4096
-        run: |
-          # legacy peer deps helps avoid peer-deps resolution failures
-          npm install --no-audit --no-fund --legacy-peer-deps
-
+      # ⑤ Viteでビルド
       - name: Build project
         run: npm run build
 
+      # ⑥ GitHub Pagesへデプロイ
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
